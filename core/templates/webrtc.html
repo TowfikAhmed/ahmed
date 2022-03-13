@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body style="max-width: 800px;margin: 50px auto;">
+    <h2>{{usr}}</h2>
+    <button onclick="createOffer()">Create Call</button>
+    <br>
+    <p id="local"></p>
+    <input type="text" id="remoteanswer">
+    <button onclick="callRecieved()">Call Recieved</button>
+
+    <br><br>
+
+
+    <input type="text" id="remote">
+    <button onclick="answerOffer()">Answer Call</button>
+    <p id="answer"></p>
+    <br>
+
+
+
+        <video id="localVideo" autoplay playsinline controls="false"></video>
+        <video id="remoteVideo" autoplay playsinline controls="false"></video>
+
+    <script>
+        const constraints = {
+            'video': true,
+            'audio': true
+        }
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                console.log('Got MediaStream:', stream);
+            })
+            .catch(error => {
+                console.error('Error accessing media devices.', error);
+            });
+
+        function getConnectedDevices(type, callback) {
+        navigator.mediaDevices.enumerateDevices()
+            .then(devices => {
+                const filtered = devices.filter(device => device.kind === type);
+                callback(filtered);
+            });
+        }
+
+        getConnectedDevices('videoinput', cameras => console.log('Cameras found', cameras));
+
+        // -----------------------------
+        async function getConnectedDevices(type) {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            return devices.filter(device => device.kind === type)
+        }
+
+        // Open camera with at least minWidth and minHeight capabilities
+        async function openCamera(cameraId, minWidth, minHeight) {
+            const constraints = {
+                'audio': {'echoCancellation': true},
+                'video': {
+                    'deviceId': cameraId,
+                    'width': {'min': minWidth},
+                    'height': {'min': minHeight}
+                    }
+                }
+
+            return await navigator.mediaDevices.getUserMedia(constraints);
+        }
+
+        const cameras = getConnectedDevices('videoinput');
+        if (cameras && cameras.length > 0) {
+            // Open first available video camera with a resolution of 1280x720 pixels
+            const stream = openCamera(cameras[0].deviceId, 1280, 720);
+        }
+
+
+        </script>
+
+
+<script>
+    
+    const localConnection = new RTCPeerConnection()
+        const sendChannel = localConnection.createDataChannel("sendChannel");
+        var createOffer = async function(){
+
+            try {
+                const constraints = {'video': true, 'audio': true};
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const videoElement = document.querySelector('video#localVideo');
+                videoElement.srcObject = stream;
+                stream.getTracks().forEach(track => {
+                    localConnection.addTrack(track, stream);
+                });
+            } catch(error) {
+                console.error('Error opening video camera.', error);
+            }
+
+            const remoteVideo = document.querySelector('#remoteVideo');
+            localConnection.addEventListener('track', async (event) => {
+                const [remoteStream] = event.streams;
+                remoteVideo.srcObject = remoteStream;
+            });
+
+            localConnection.onicecandidate = e =>  {
+                console.log(" NEW ice candidnat!! on localconnection reprinting SDP " )
+                console.log(JSON.stringify(localConnection.localDescription));
+                document.getElementById('local').innerText = JSON.stringify(localConnection.localDescription);
+            }
+
+             sendChannel.onmessage =e =>  console.log("messsage received!!!"  + e.data )
+               sendChannel.onopen = e => console.log("open!!!!");
+                 sendChannel.onclose =e => console.log("closed!!!!!!");
+
+            localConnection.createOffer().then(o => localConnection.setLocalDescription(o) )
+        }
+        var callRecieved = function(){
+            localConnection.setRemoteDescription (JSON.parse(document.getElementById('remoteanswer').value)).then(a=>console.log("done"));
+        }
+
+
+        var receiveChannel =  undefined;
+        var answerOffer = async function(){
+
+            //set offer const offer = ...
+            var offer = JSON.parse(document.getElementById('remote').value);
+            console.log(offer)
+            const remoteConnection = new RTCPeerConnection()
+
+            try {
+                const constraints = {'video': true, 'audio': true};
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const videoElement = document.querySelector('video#localVideo');
+                videoElement.srcObject = stream;
+                stream.getTracks().forEach(track => {
+                    remoteConnection.addTrack(track, stream);
+                });
+            } catch(error) {
+                console.error('Error opening video camera.', error);
+            }
+
+            const remoteVideo = document.querySelector('#remoteVideo');
+            remoteConnection.addEventListener('track', async (event) => {
+                const [remoteStream] = event.streams;
+                remoteVideo.srcObject = remoteStream;
+            });
+
+            remoteConnection.onicecandidate = e =>  {
+            console.log(" NEW ice candidnat!! on localconnection reprinting SDP " )
+                document.getElementById('answer').innerText = JSON.stringify(remoteConnection.localDescription);
+            }
+
+ 
+            remoteConnection.ondatachannel= e => {
+                  receiveChannel = e.channel;
+                  receiveChannel.onmessage =e =>  console.log("messsage received!!!"  + e.data )
+                  receiveChannel.onopen = e => console.log("open!!!!");
+                  receiveChannel.onclose =e => console.log("closed!!!!!!");
+                  remoteConnection.channel = receiveChannel;
+
+            }
+
+
+            remoteConnection.setRemoteDescription(offer).then(a=>console.log("done"))
+
+            //create answer
+            remoteConnection.createAnswer().then(a => remoteConnection.setLocalDescription(a)).then(a=>
+            console.log(JSON.stringify(remoteConnection.localDescription)))
+            //send the anser to the client 
+        }
+    </script>
+</body>
+</html>
